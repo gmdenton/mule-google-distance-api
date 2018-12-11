@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+
+    <flow name="get:/distance:api-config">
+        <set-variable variableName="flowName" value="google-distance" doc:name="set flowName"/>
+        <set-variable variableName="googleDistanceStartTime" value="#[System.currentTimeMillis()]" doc:name="Variable googleDistanceStartTime"/>
+        <expression-component doc:name="Generate transactionID"><![CDATA[sessionVars.transactionId = java.util.UUID.randomUUID();]]></expression-component>
+        <logger message="Flow name=#[flowVars.flowName] TransactionId=#[sessionVars.transactionId ] " level="INFO" doc:name="Log flow parameters"/>
+        <expression-component doc:name="set Query Params"><![CDATA[flowVars.queryParams = flowVars.queryParams == empty ? message.inboundProperties.'http.query.string' : flowVars.queryParams;
+flowVars.queryParams = flowVars.queryParams +'&key=${client_secret}';]]></expression-component>
+        <http:request config-ref="HTTP_Request_Configuration" path="${google-distance-uri}?#[flowVars.queryParams]" method="GET" doc:name="HTTP GET google-distance-uri">
+            <http:success-status-code-validator values="200..500"/>
+        </http:request>
+        <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+        <expression-component doc:name="Set error message"><![CDATA[flowVars.status = payload.status;
+if (payload.containsKey("error_message")) {
+  flowVars.error_message = payload.error_message;
+}]]></expression-component>
+<!--         <validation:is-true message="Bad Request to Google API: #[flowVars.error_message]" exceptionClass="org.mule.module.apikit.exception.BadRequestException" expression="#[payload.status == 'OK']" doc:name="Validate return status"/> -->
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.status == 'OK']">
+                <set-property propertyName="http.status" value="#[message.inboundProperties['http.status']]" doc:name="Set http.status"/>
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	origin: payload.origin_addresses,
+	destination: payload.destination_addresses,
+	travel: payload.rows.elements map {
+		distance: $.distance.text,
+		time: $.duration.text
+		
+	}
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <set-property propertyName="http.status" value="#[400]" doc:name="Set failure http.status"/>
+            </otherwise>
+        </choice>
+        <logger message="TransactionId=#[sessionVars.transactionId] Payload=#[message.payloadAs(java.lang.String)] " level="INFO" doc:name="log Payload"/>
+        <logger message="Flow name=#[flowVars.flowName] TransactionId=#[sessionVars.transactionId] Status=#[message.outboundProperties['http.status']] timeTaken=#[System.currentTimeMillis() - flowVars.googleDistanceStartTime]" level="INFO" doc:name="log time taken"/>
+    </flow>
+
+</mule>

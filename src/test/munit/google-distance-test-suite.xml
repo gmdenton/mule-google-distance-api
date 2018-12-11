@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" 
+    xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  	xmlns:mock="http://www.mulesoft.org/schema/mule/mock" 
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns="http://www.mulesoft.org/schema/mule/core" 
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/mock http://www.mulesoft.org/schema/mule/mock/current/mule-mock.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+    <munit:config mock-connectors="false" mock-inbounds="false" name="munit" doc:name="MUnit configuration"/>
+    <spring:beans>
+        <spring:import resource="classpath:config.xml"/>
+        <spring:import resource="classpath:common.xml"/>
+        <spring:import resource="classpath:mule-google-distance.xml"/>
+    </spring:beans>
+    <http:request-config name="HTTP_Localhost_Request_Configuration1" host="localhost" port="${api.default-port}" basePath="${api.basepath}" doc:name="HTTP Request Configuration"/>
+    <munit:test name="google-distance-test-suite-successful-test" description="MUnit Test">
+        <mock:when messageProcessor=".*:.*" doc:name="Mock">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="HTTP GET google-distance-uri"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[getResource('examples/google-distance-response.json').asString()]" mimeType="application/json">
+                <mock:inbound-properties>
+                    <mock:inbound-property key="http.status" value="#[202]"/>
+                </mock:inbound-properties>
+            </mock:then-return>
+        </mock:when>
+        <http:request config-ref="HTTP_Localhost_Request_Configuration1" path="distance" method="GET" doc:name="HTTP GET google-distance">
+            <http:request-builder>
+                <http:query-param paramName="units" value="metric"/>
+                <http:query-param paramName="origins" value="New York"/>
+                <http:query-param paramName="destinations" value="Washington"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="200..599"/>
+        </http:request>
+        <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+        <munit:assert-on-equals message="Payload doesn't match expected" expectedValue="#['Washington, DC, USA']" actualValue="#[payload.origin[0]]" doc:name="Assert payload matches"/>
+        <munit:assert-true message="Status #[message.inboundProperties['http.status']] does not match expected status 202" condition="#[message.inboundProperties['http.status'] == 202]" doc:name="Assert http status == 202"/>
+    </munit:test>
+    <munit:test name="google-distance-test-suite-failure-400-test" description="MUnit Test">
+        <mock:when messageProcessor=".*:.*" doc:name="Mock">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="HTTP GET google-distance-uri"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[getResource('examples/google-distance-error.json').asString()]" mimeType="application/json">
+                <mock:inbound-properties>
+                    <mock:inbound-property key="http.status" value="#[400]"/>
+                </mock:inbound-properties>
+            </mock:then-return>
+        </mock:when>
+        <http:request config-ref="HTTP_Localhost_Request_Configuration1" path="distance" method="GET" doc:name="HTTP GET google-distance">
+            <http:request-builder>
+                <http:query-param paramName="units" value="metric"/>
+                <http:query-param paramName="origins" value="New York"/>
+                <http:query-param paramName="destinations" value="Washington"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="200..500"/>
+        </http:request>
+        <munit:assert-on-equals message="Payload didn't match expected" expectedValue="#[getResource('examples/google-distance-error.json').asString()]" actualValue="#[message.payloadAs(java.lang.String)]" doc:name="Assert payload matches"/>
+        <munit:assert-true message="Status #[message.inboundProperties['http.status']] does not match expected status 400" condition="#[message.inboundProperties['http.status'] == 400]" doc:name="Assert http status == 400"/>
+    </munit:test>
+    
+</mule>

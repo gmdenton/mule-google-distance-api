@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+ <flow name="mule-google-distance-main">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="${api.http.path}" doc:name="HTTP"/>
+        <set-variable variableName="flowName" value="main" doc:name="Set default flow name"/>
+        <apikit:router config-ref="api-config" doc:name="APIkit Router"/>
+        <exception-strategy ref="mule-google-distance-apikit-Mapping_Exception_Strategy" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <apikit:mapping-exception-strategy name="mule-google-distance-apikit-Mapping_Exception_Strategy">
+        <apikit:mapping statusCode="404">
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException"/>
+            <logger message="#[404]  #['resource' + message.inboundProperties.'http.request.uri' + 'not found']" level="ERROR" category="mule-google-api-v1-&gt;#[flowVars.flowName].error" doc:name="Logger"/>
+            <set-property propertyName="http.status" value="#[400]" doc:name="Property"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="400">
+            <apikit:exception value="org.mule.module.apikit.exception.BadRequestException"/>
+            <logger level="INFO" doc:name="Logger"  message="#[400] #['Invalid request '] #[message.payloadAs(java.lang.String)]"/>
+            <set-property propertyName="http.status" value="#[400]" mimeType="application/json" doc:name="Property"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="500">
+            <apikit:exception value="org.mule.api.MuleException"/>
+            <logger message="#[500] #['Unable to complete request due to technical error']" level="ERROR" category="mule-google-api-v1-&gt;#[flowVars.flowName].error" doc:name="Logger"/>
+        </apikit:mapping>
+    </apikit:mapping-exception-strategy>
+</mule>

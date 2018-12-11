@@ -1,0 +1,42 @@
+#%RAML 1.0
+title: sample RAML
+version: 1.0
+
+baseUri: http://localhost:8081/v1/api/google/
+
+traits:
+  trackable: !include traits/trackable.raml
+
+documentation: 
+  - title: Google demo API
+    content: |
+      this RAML defines the massage booking services API.
+
+/health:
+  displayName: Health check for API
+  get:
+    description: Simple endpoint health check
+    responses:
+      200:
+        body:
+          application/json: 
+            example: |
+              { 
+                "api-name": "my api", 
+                "check-date-Time" : "01-01-2018:10:16:57"
+               }  
+
+/distance:
+  get:
+    description: Return distance between 2 locations from Google API.
+    queryParameters:
+      units:
+      origins:
+      destinations:
+    responses:
+      200:
+        body:
+          application/json:
+              example: ! examples/google-distance-response.json
+              
+                         
